@@ -14,7 +14,7 @@
 #include <iostream>
 #include <string>
 #include "ximage.h"
-#include "math.h"
+#include <math.h>
 
 //we need to define UNICODE to use CxImage libarary
 #ifndef UNICODE
@@ -25,7 +25,7 @@
 #define _UNICODE
 #endif
 template<typename T>
-void new2d(int32_t cx, int32_t cy, T*** rev, T initVal) {
+void new2d(size_t cx, size_t cy, T*** rev, T initVal) {
     T** f = new T*[cy];
     for (int i = 0; i < cy; i++) {
         f[i] = new T[cx];
@@ -36,38 +36,38 @@ void new2d(int32_t cx, int32_t cy, T*** rev, T initVal) {
 }
 
 template<typename T>
-void del2d(int32_t cx, int32_t cy, T** array) {
-    for (int32_t i = 0; i < cy; i++) {
+void del2d(size_t cx, size_t cy, T** array) {
+    for (size_t i = 0; i < cy; i++) {
         delete[] array[i];
     }
     delete[] array;
 }
 
-float** padarray(int32_t cx, int32_t cy, float** im, int32_t px, int32_t py) {
+float** padarray(size_t cx, size_t cy, float** im, size_t px, size_t py) {
     float** om;
     //0.0f 是为了让函数模板类型推断正确通过
     new2d((cx + 2 * px), (cy + 2 * py), &om, 0.0f);
-    for (int32_t i = 0; i < cy; i++) {
-        for (int32_t j = 0; j < cx; j++) {
+    for (size_t i = 0; i < cy; i++) {
+        for (size_t j = 0; j < cx; j++) {
             om[i + py][j + px] = im[i][j];
         }
     }
     //padding edge
-    for (int32_t i = 1; i < cy - 1; i++) {
-        for (int32_t j = 0; j < px; j++) {
+    for (size_t i = 1; i < cy - 1; i++) {
+        for (size_t j = 0; j < px; j++) {
             om[py + i][j] = om[py + i][px];
             om[py + i][cx + px + j] = om[py + i][cx + px - 1];
         }
     }
-    for (int32_t i = 1; i < cx - 1; i++) {
-        for (int32_t j = 0; j < py; j++) {
+    for (size_t i = 1; i < cx - 1; i++) {
+        for (size_t j = 0; j < py; j++) {
             om[j][px + i] = om[py][px + i];
             om[cy + py + j][px + i] = om[cy + py - 1][py + i];
         }
     }
     //padding corner
-    for (int32_t i = 0; i <= py; i++) {
-        for (int32_t j = 0; j <= px; j++) {
+    for (size_t i = 0; i <= py; i++) {
+        for (size_t j = 0; j <= px; j++) {
             om[i][j] = om[py][px];
             om[i][j + px + cx - 1] = om[py][cx + px - 1];
             om[i + py + cy - 1][j] = om[py + cy - 1][px];
@@ -78,17 +78,17 @@ float** padarray(int32_t cx, int32_t cy, float** im, int32_t px, int32_t py) {
 
 }
 
-float** imfilter(float** im, int32_t ix, int32_t iy, float** filter, int32_t fx, int32_t fy) {
+float** imfilter(float** im, size_t ix, size_t iy, float** filter, size_t fx, size_t fy) {
     float **pim = padarray(ix, iy, im, fx, fy);
     float **om;
     new2d(ix, iy, &om, 0.0f);
-    int32_t mx = (fx - 1) / 2;
-    int32_t my = (fy - 1) / 2;
-    for (int32_t i = 0; i < iy; i++) {
-        for (int32_t j = 0; j < ix; j++) {
+    size_t mx = (fx - 1) / 2;
+    size_t my = (fy - 1) / 2;
+    for (size_t i = 0; i < iy; i++) {
+        for (size_t j = 0; j < ix; j++) {
             om[i][j] = 0;
-            for (int32_t m = 0; m < fy; m++) {
-                for (int32_t n = 0; n < fx; n++) {
+            for (size_t m = 0; m < fy; m++) {
+                for (size_t n = 0; n < fx; n++) {
                     om[i][j] += pim[m + i + my + 1][n + j + mx + 1] * filter[m][n];
                 }
             }
@@ -116,24 +116,24 @@ float** gaussianFilterCreator(float sigma, int size) {
     return f;
 }
 // for debug usage
-void dispMatrix(float **im, int32_t sx, int32_t sy) {
-    std::cout.precision(10);
-    for (int32_t i = 0; i < sy; i++) {
-        for (int32_t  j = 0; j < sx; j++) {
-            std::cout  << im[i][j] << " ";
-        }
-        std::cout << std::endl;
-    }
-}
+// void dispMatrix(float **im, size_t sx, size_t sy) {
+// std::cout.precision(10);
+// for (size_t i = 0; i < sy; i++) {
+// for (size_t  j = 0; j < sx; j++) {
+// std::cout  << im[i][j] << " ";
+// }
+// std::cout << std::endl;
+// }
+// }
 typedef struct pos {
-    int32_t x, y;
+    size_t x, y;
 } position;
 
-position maxIndensity(float **im, int32_t imx, int32_t imy, int32_t fltx, int32_t flty) {
+position maxIndensity(float **im, size_t imx, size_t imy, size_t fltx, size_t flty) {
     position p = {0, 0};
     float maxval = 0;
-    for(int32_t i = flty; i < imy + flty; i++) {
-        for (int32_t j = fltx; j < imx + fltx; j++) {
+    for(size_t i = flty; i < imy + flty; i++) {
+        for (size_t j = fltx; j < imx + fltx; j++) {
             if (im[i][j] > maxval) {
                 maxval = im[i][j];
                 p.y = i;
@@ -144,115 +144,105 @@ position maxIndensity(float **im, int32_t imx, int32_t imy, int32_t fltx, int32_
     return p;
 }
 
-float sum(float **im, int32_t imx, int32_t imy) {
+float sum(float **im, size_t imx, size_t imy) {
     float retval = 0;
-    for(int32_t i = 0; i < imy; i++) {
-        for(int32_t j = 0; j < imx; j++) {
+    for(size_t i = 0; i < imy; i++) {
+        for(size_t j = 0; j < imx; j++) {
             retval += im[i][j];
         }
     }
     return retval;
 }
-//这个函数可以优化，不要每次都重新分配内存
-//void matrixBiop(float **im1, float **im2, float **im3, int32_t imx, int32_t imy, int32_t co) {
-//    for(int32_t i = 0; i < imy; i++) {
-//        for(int32_t j = 0; j < imx; j++) {
-//            im3[i][j] = im1[i][j] + co * im2[i][j];
-//        }
-//    }
-//}
 
 
-void applyFilterInPosition(float **im, position p, float **filter, int32_t fltx, int32_t flty) {
-    int32_t hfx = (fltx - 1) / 2;
-    int32_t hfy = (flty - 1) / 2;
-    int32_t upleftx = p.x - hfx;
-    int32_t uplefty = p.y - hfy;
-    for(int32_t i = 0; i < flty; i++) {
-        for(int32_t j = 0; j < fltx; j++) {
+void applyFilterInPosition(float **im, position p, float **filter, size_t fltx, size_t flty) {
+    size_t hfx = (fltx - 1) / 2;
+    size_t hfy = (flty - 1) / 2;
+    size_t upleftx = p.x - hfx;
+    size_t uplefty = p.y - hfy;
+    for(size_t i = 0; i < flty; i++) {
+        for(size_t j = 0; j < fltx; j++) {
             im[uplefty + i][upleftx + j] -= filter[i][j];
         }
     }
 }
 
-uint8_t** htSasanMethod(float **im, int32_t imx, int32_t imy, float **filter, int32_t fltx, int32_t flty) {
-    float **blurImg = imfilter(im, imx, imy, filter, fltx, flty);
+float** htSasanMethod(float **im, size_t imx, size_t imy, float **filter, size_t fltx, size_t flty) {
+    float **blurImg = im;
     float **paddingBlur;
-    int32_t halfx = (fltx - 1) / 2;
-    int32_t halfy = (flty - 1) / 2;
+    size_t halfx = (fltx - 1) / 2;
+    size_t halfy = (flty - 1) / 2;
     new2d(imx + 2 * fltx, imy + 2 * flty, &paddingBlur, 0.0f);
-    for (int32_t i = 0; i < imy; i++) {
-        for (int32_t j = 0; j < imx; j++) {
+    for (size_t i = 0; i < imy; i++) {
+        for (size_t j = 0; j < imx; j++) {
             paddingBlur[i + flty][j + fltx] = blurImg[i][j];
         }
     }
     //返回的二值图像 biImg
-    uint8_t **biImg;
-    new2d(imx, imy, &biImg, uint8_t(0));
+    float **biImg;
+    new2d(imx, imy, &biImg, 0.0f);
     //直接把浮点数传递给整型会有问题吗？
-    int32_t dots = sum(im, imx, imy);
-    for(int32_t i = 0; i < dots; i++) {
-        //errorImg要释放内存
-        //matrixBiop(blurImg, midBlur, errorImg, imx, imy, -1);
+    size_t dots = sum(im, imx, imy);
+    for(size_t i = 0; i < dots; i++) {
         position maxPos = maxIndensity(paddingBlur, imx, imy, fltx, flty);
         //这一句是有用的
         paddingBlur[maxPos.y][maxPos.x] = -1;
-        biImg[maxPos.y - flty][maxPos.x - fltx] = 255;
+        biImg[maxPos.y - flty][maxPos.x - fltx] = 1.0f;
         applyFilterInPosition(paddingBlur, maxPos, filter, fltx, flty);
         //dealing with edge
         if (maxPos.y == flty) {
-            for (int32_t i = 1; i <= halfy; i++) {
+            for (size_t i = 1; i <= halfy; i++) {
                 position p = { maxPos.x, maxPos.y - i };
                 applyFilterInPosition(paddingBlur, p, filter, fltx, flty);
             }
         }
         if (maxPos.y == flty + imy - 1) {
-            for (int32_t i = 1; i <= halfy; i++) {
+            for (size_t i = 1; i <= halfy; i++) {
                 position p = { maxPos.x, maxPos.y + i };
                 applyFilterInPosition(paddingBlur, p, filter, fltx, flty);
             }
 
         }
         if (maxPos.x == fltx) {
-            for (int32_t i = 1; i <= halfx; i++) {
+            for (size_t i = 1; i <= halfx; i++) {
                 position p = { maxPos.x - i, maxPos.y };
                 applyFilterInPosition(paddingBlur, p, filter, fltx, flty);
             }
         }
         //dealing with corner
         if (maxPos.x == fltx + imx - 1) {
-            for (int32_t i = 1; i <= halfy; i++) {
+            for (size_t i = 1; i <= halfy; i++) {
                 position p = { maxPos.x + i, maxPos.y };
                 applyFilterInPosition(paddingBlur, p, filter, fltx, flty);
             }
         }
         if (maxPos.x == fltx && maxPos.y == flty) {
-            for (int32_t i = 1; i <= halfy; i++) {
-                for (int32_t j = 1; j <= halfx; j++) {
+            for (size_t i = 1; i <= halfy; i++) {
+                for (size_t j = 1; j <= halfx; j++) {
                     position p = { maxPos.x - j, maxPos.y - i };
                     applyFilterInPosition(paddingBlur, p, filter, fltx, flty);
                 }
             }
         }
         if (maxPos.x == fltx && maxPos.y == flty + imy - 1) {
-            for (int32_t i = 1; i <= halfy; i++) {
-                for (int32_t j = 1; j <= halfx; j++) {
+            for (size_t i = 1; i <= halfy; i++) {
+                for (size_t j = 1; j <= halfx; j++) {
                     position p = { maxPos.x - j, maxPos.y + i };
                     applyFilterInPosition(paddingBlur, p, filter, fltx, flty);
                 }
             }
         }
         if (maxPos.x == fltx + imx - 1 && maxPos.y == flty) {
-            for (int32_t i = 1; i <= halfy; i++) {
-                for (int32_t j = 1; j <= halfx; j++) {
+            for (size_t i = 1; i <= halfy; i++) {
+                for (size_t j = 1; j <= halfx; j++) {
                     position p = { maxPos.x + j, maxPos.y - i };
                     applyFilterInPosition(paddingBlur, p, filter, fltx, flty);
                 }
             }
         }
         if (maxPos.x == fltx + imx - 1 && maxPos.y == flty + imy - 1) {
-            for (int32_t i = 1; i <= halfy; i++) {
-                for (int32_t j = 1; j <= halfx; j++) {
+            for (size_t i = 1; i <= halfy; i++) {
+                for (size_t j = 1; j <= halfx; j++) {
                     position p = { maxPos.x + j, maxPos.y + i };
                     applyFilterInPosition(paddingBlur, p, filter, fltx, flty);
                 }
@@ -261,59 +251,165 @@ uint8_t** htSasanMethod(float **im, int32_t imx, int32_t imy, float **filter, in
 
     }
     //释放内存
-    del2d(imx, imy, blurImg);
+    //del2d(imx, imy, blurImg);
     del2d(imx + 2 * fltx, imy + 2 * flty, paddingBlur);
     return biImg;
 }
-
 int main() {
     CxImage image;
+    //divide the image into small blocks so we can process it in parallel by adding OpenMP support
+    size_t blockSize = 32;
+    size_t fltSize = 11;
     float **gausFilter = gaussianFilterCreator(1.3f, 11);
-    if (image.Load(_T("lena.jpg") , CXIMAGE_SUPPORT_JPG)) { // _T() is necessary if we need UNICODE support
-        image.GrayScale();                                 // To simplify the problem ,convert the image to 8 bits gray scale
-        int width = image.GetWidth();
-        int height = image.GetHeight();
-        float** imaData;
-        new2d(width, height, &imaData, 0.0f);
-        for (int32_t y = 0; y < height; y++) {
+    // _T() is necessary if we need UNICODE support
+    if (image.Load(_T("lena.jpg") , CXIMAGE_SUPPORT_JPG)) {
+        // To simplify the problem ,convert the image to 8 bits gray scale
+        image.GrayScale();
+        size_t width = image.GetWidth();
+        size_t height = image.GetHeight();
+        size_t xBlocks = (width + blockSize - 1) / blockSize;
+        size_t yBlocks = (height + blockSize - 1) / blockSize;
+        size_t xPadImg = blockSize * xBlocks;
+        size_t yPadImg = blockSize * yBlocks;
+        float** imageData;
+        new2d(xPadImg, yPadImg, &imageData, 0.0f);
+
+        for (size_t y = 0; y < height; y++) {
             uint8_t *iSrc = image.GetBits(y);
-            for (int32_t x = 0; x < width; x++) {
-                imaData[y][x] = iSrc[x] / 255.0;
+            for (size_t x = 0; x < width; x++) {
+                imageData[y][x] = iSrc[x] / 255.0;
             }
         }
-        //dispMatrix(imaData, width, height);
-        //blurred image
-        uint8_t **u8Img;
-        // new2d(height, width, &u8Img, uint8_t(0));
+        //padding image
+        for(size_t x = width; x < xPadImg; x++) {
+            for(size_t y = 0; y < height; y++) {
+                imageData[y][x] = imageData[y][width - 1];
+            }
+        }
+        for(size_t y = height; y < yPadImg; y++) {
+            for(size_t x = 0; x < xPadImg; x++) {
+                imageData[y][x] = imageData[height - 1][x];
+            }
+        }
+        float ** blurImageData = imfilter(imageData, xPadImg, yPadImg, gausFilter, fltSize, fltSize);
+        del2d(xPadImg, yPadImg, imageData);
+        //halftone image
+        float **htImage;
+        new2d(xPadImg, yPadImg, &htImage, 0.0f);
         //计时函数
         DWORD dwStart;
         DWORD dwEnd;
         DWORD dwTimes;
         dwStart = GetTickCount();
-        u8Img = htSasanMethod(imaData, width, height, gausFilter, 11, 11);
+        /////////////////////////////////////////////////////////////////////
+        //phase 1:
+        size_t phaseOne_x = (xBlocks + 1) / 2;
+        size_t phaseOne_y = (yBlocks + 1) / 2;
+        for(size_t i = 0; i < phaseOne_y; i++) {
+            for(size_t j = 0; j < phaseOne_x; j++) {
+                float** blockImage;
+                new2d(blockSize, blockSize, &blockImage, 0.0f);
+                for(size_t m = 0; m < blockSize; m++) {
+                    for(size_t n = 0; n < blockSize; n++) {
+                        blockImage[m][n] = blurImageData[2 * i * blockSize + m][2 * j * blockSize + n];
+                    }
+                }
+                float **res = htSasanMethod(blockImage, blockSize, blockSize, gausFilter, 11, 11);
+                del2d(blockSize, blockSize, blockImage);
+                for(size_t m = 0; m < blockSize; m++) {
+                    for(size_t n = 0; n < blockSize; n++) {
+                        htImage[2 * i * blockSize + m][2 * j * blockSize + n] = res[m][n];
+                    }
+                }
+            }
+        }
+        //phase 2:
+        float **fltHtImage2 = imfilter(htImage, xPadImg, yPadImg, gausFilter, fltSize, fltSize);
+        size_t phaseTwo_x = xBlocks / 2;
+        size_t phaseTwo_y = (yBlocks + 1) / 2;
+        for(size_t i = 0; i < phaseTwo_y; i++) {
+            for(size_t j = 0; j < phaseTwo_x; j++) {
+                float** blockImage;
+                new2d(blockSize, blockSize, &blockImage, 0.0f);
+                for(size_t m = 0; m < blockSize; m++) {
+                    for(size_t n = 0; n < blockSize; n++) {
+                        blockImage[m][n] = blurImageData[2 * i * blockSize + m][(2 * j + 1) * blockSize  + n] - fltHtImage2[2 * i * blockSize + m][(2 * j + 1) * blockSize +  + n];
+                    }
+                }
+                float **res = htSasanMethod(blockImage, blockSize, blockSize, gausFilter, 11, 11);
+                del2d(blockSize, blockSize, blockImage);
+                for(size_t m = 0; m < blockSize; m++) {
+                    for(size_t n = 0; n < blockSize; n++) {
+                        htImage[2 * i * blockSize + m][(2 * j + 1) * blockSize  + n] = res[m][n];
+                    }
+                }
+            }
+        }
+        del2d(xPadImg, yPadImg, fltHtImage2);
+        //phase 3:
+        float **fltHtImage3 = imfilter(htImage, xPadImg, yPadImg, gausFilter, fltSize, fltSize);
+        size_t phaseThree_x = (xBlocks + 1) / 2;
+        size_t phaseThree_y = yBlocks / 2;
+        for(size_t i = 0; i < phaseThree_y; i++) {
+            for(size_t j = 0; j < phaseThree_x; j++) {
+                float** blockImage;
+                new2d(blockSize, blockSize, &blockImage, 0.0f);
+                for(size_t m = 0; m < blockSize; m++) {
+                    for(size_t n = 0; n < blockSize; n++) {
+                        blockImage[m][n] = blurImageData[(2 * i + 1) * blockSize + m ][2 * j * blockSize + n] - fltHtImage3[(2 * i + 1) * blockSize + m][2 * j * blockSize + n];
+                    }
+                }
+                float **res = htSasanMethod(blockImage, blockSize, blockSize, gausFilter, 11, 11);
+                del2d(blockSize, blockSize, blockImage);
+                for(size_t m = 0; m < blockSize; m++) {
+                    for(size_t n = 0; n < blockSize; n++) {
+                        htImage[(2 * i + 1) * blockSize + m ][2 * j * blockSize + n] = res[m][n];
+                    }
+                }
+            }
+        }
+        del2d(xPadImg, yPadImg, fltHtImage3);
+        //phase 4:
+        float **fltHtImage4 = imfilter(htImage, xPadImg, yPadImg, gausFilter, fltSize, fltSize);
+        size_t phaseFour_x = xBlocks / 2;
+        size_t phaseFour_y = yBlocks / 2;
+        for(size_t i = 0; i < phaseFour_y; i++) {
+            for(size_t j = 0; j < phaseFour_x; j++) {
+                float** blockImage;
+                new2d(blockSize, blockSize, &blockImage, 0.0f);
+                for(size_t m = 0; m < blockSize; m++) {
+                    for(size_t n = 0; n < blockSize; n++) {
+                        blockImage[m][n] = blurImageData[(2 * i + 1) * blockSize + m][(2 * j + 1) * blockSize  + n] - fltHtImage4[(2 * i + 1) * blockSize + m][(2 * j + 1) * blockSize  + n];
+                    }
+                }
+                float **res = htSasanMethod(blockImage, blockSize, blockSize, gausFilter, 11, 11);
+                del2d(blockSize, blockSize, blockImage);
+                for(size_t m = 0; m < blockSize; m++) {
+                    for(size_t n = 0; n < blockSize; n++) {
+                        htImage[(2 * i + 1) * blockSize + m][(2 * j + 1) * blockSize  + n] = res[m][n];
+                    }
+                }
+            }
+        }
+        del2d(xPadImg, yPadImg, fltHtImage4);
+        //////////////////////////////////////////////////
         dwEnd = GetTickCount();
         dwTimes = dwEnd - dwStart;
         printf("加网lena图用时 %ld ms\n", dwTimes);
+        uint8_t **htImageByte;
+        new2d(xPadImg, yPadImg, &htImageByte, uint8_t(0));
+        for(size_t i = 0; i < yPadImg; i++) {
+            for(size_t j = 0; j < xPadImg; j++) {
+                htImageByte[i][j] = htImage[i][j] * 255;
+            }
+        }
         CxImage outputImg;
-        outputImg.CreateFromMatrix(u8Img, width, height, 8, width, NULL);
-
+        outputImg.CreateFromMatrix(htImageByte, width, height, 8, xPadImg, NULL);
         outputImg.Save(_T("ht_lena.bmp"), CXIMAGE_SUPPORT_BMP);
-        del2d(width, height, imaData);
         del2d(11, 11, gausFilter);
-        del2d(width, height, u8Img);
+        del2d(xPadImg, yPadImg, htImage);
+        del2d(xPadImg, yPadImg, htImageByte);
         std::cout << "done\n";
         getchar();
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-
