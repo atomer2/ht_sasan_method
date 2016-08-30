@@ -15,7 +15,7 @@
 #include <string>
 #include "ximage.h"
 #include <math.h>
-#include "matrix.h"
+
 //we need to define UNICODE to use CxImage libarary
 #ifndef UNICODE
 #define UNICODE
@@ -24,274 +24,370 @@
 #ifndef _UNICODE
 #define _UNICODE
 #endif
+template<typename T>
+void new2d(size_t cx, size_t cy, T*** rev, T initVal)
+{
+    T** f = new T*[cy];
+    for (int i = 0; i < cy; i++) {
+        f[i] = new T[cx];
+        //为了提高速度不得不这么做，应该有更好的办法
+        memset(f[i], initVal, sizeof(T)*cx);
+    }
+    *rev = f;
+}
 
 template<typename T>
-matrix<T>* padarray(matrix<T>& im, size_t px, size_t py)
+void del2d(size_t cx, size_t cy, T** array)
 {
-    size_t cx = im.get_width();
-    size_t cy = im.get_height();
-    matrix<T> *om = new matrix<T>(cx + 2 * px, cy + 2 * py);
-    om->put_sub_matrix(py, px, im);
-    //padding edge and corner
     for (size_t i = 0; i < cy; i++) {
-        for (size_t j = 0; j < px; j++) {
-            (*om)(py + i, j) = (*om)(py + i, px);
-            (*om)(py + i, cx + px + j) = (*om)(py + i, cx + px - 1);
+        delete[] array[i];
+    }
+    delete[] array;
+}
+
+float** padarray(size_t cx, size_t cy, float** im, size_t px, size_t py)
+{
+    float** om;
+    //0.0f 是为了让函数模板类型推断正确通过
+    new2d((cx + 2 * px), (cy + 2 * py), &om, 0.0f);
+    for (size_t i = 0; i < cy; i++) {
+        for (size_t j = 0; j < cx; j++) {
+            om[i + py][j + px] = im[i][j];
         }
     }
-    for (size_t i = 0; i < cx + 2 * px; i++) {
+    //padding edge
+    for (size_t i = 0; i < cy; i++) {
+        for (size_t j = 0; j < px; j++) {
+            om[py + i][j] = om[py + i][px];
+            om[py + i][cx + px + j] = om[py + i][cx + px - 1];
+        }
+    }
+    for (size_t i = 0; i < cx + 2 * px ; i++) {
         for (size_t j = 0; j < py; j++) {
-            (*om)(j, i) = (*om)(py, i);
-            (*om)(cy + py + j, i) = (*om)(cy + py - 1, i);
+            om[j][i] = om[py][i];
+            om[cy + py + j][i] = om[cy + py - 1][i];
         }
     }
     return om;
 }
 
-template<typename T>
-matrix<float>* imfilter(matrix<T> &im, matrix<float> &filter)
+float** imfilter(float** im, size_t ix, size_t iy, float** filter, size_t fx, size_t fy)
 {
-    size_t ix = im.get_width();
-    size_t iy = im.get_height();
-    size_t fx = filter.get_width();
-    size_t fy = filter.get_height();
-    matrix<T> *pim = padarray<T>(im, fx, fy);
-    matrix<float> *om = new matrix<float>(ix, iy);
+    float **pim = padarray(ix, iy, im, fx, fy);
+    float **om;
+    new2d(ix, iy, &om, 0.0f);
     size_t mx = (fx - 1) / 2;
     size_t my = (fy - 1) / 2;
     for (size_t i = 0; i < iy; i++) {
         for (size_t j = 0; j < ix; j++) {
+            om[i][j] = 0;
             for (size_t m = 0; m < fy; m++) {
                 for (size_t n = 0; n < fx; n++) {
-                    (*om)(i, j) += (*pim)(m + i + my + 1, n + j + mx + 1) * filter(m, n);
+                    om[i][j] += pim[m + i + my + 1][n + j + mx + 1] * filter[m][n];
                 }
             }
         }
     }
-    delete pim;
+    del2d(ix + fx, iy + fy, pim);
     return om;
 }
 
-matrix<float>* gaussianFilterCreator(float sigma, size_t size)
+float** gaussianFilterCreator(float sigma, int size)
 {
     float sum = 0;
-    matrix<float> *f = new matrix<float>(size, size);
+    float **f;
     int mid = (size + 1) / 2;
+    new2d(size, size, &f, 0.0f);
     //为什么这里用int就可以用size_t就不行？
     //size_t是没有符号的，但是以下运算是有负数出现的
     //所以不能用size_t
     for (int y = 0; y < size; y++) {
         for (int x = 0; x < size; x++) {
-            sum += (*f)(y, x) = exp(-(pow((x + 1 - mid), 2) + pow((y + 1 - mid), 2)) / (2 * pow(sigma, 2)));
-
+            sum += f[y][x] = exp(-(pow((x + 1 - mid), 2) + pow((y + 1 - mid), 2)) / (2 * pow(sigma, 2)));
         }
     }
-    for (size_t y = 0; y < size; y++) {
-        for (size_t x = 0; x < size; x++) {
-            (*f)(y, x) /= sum;
+    for (int y = 0; y < size; y++) {
+        for (int x = 0; x < size; x++) {
+            f[y][x] /= sum;
         }
     }
     return f;
 }
+// for debug usage
+// void dispMatrix(float **im, size_t sx, size_t sy) {
+// std::cout.precision(10);
+// for (size_t i = 0; i < sy; i++) {
+// for (size_t  j = 0; j < sx; j++) {
+// std::cout  << im[i][j] << " ";
+// }
+// std::cout << std::endl;
+// }
+// }
+typedef struct pos {
+    size_t x, y;
+} position;
 
-void applyFilterInPosition(matrix<float> &im, size_t x, size_t y, matrix<float> &filter)
+position maxIndensity(float **im, size_t imx, size_t imy, size_t fltx, size_t flty)
 {
-    size_t fw = filter.get_width();
-    size_t fh = filter.get_height();
-    size_t hfw = (fw - 1) / 2;
-    size_t hfh = (fh - 1) / 2;
-    size_t upleftx = x - hfw;
-    size_t uplefty = y - hfh;
-    for(size_t i = 0; i < fh; i++) {
-        for(size_t j = 0; j < fw; j++) {
-            im(uplefty + i, upleftx + j) -= filter(i, j);
+    position p = {0, 0};
+    float maxval = 0;
+    for(size_t i = flty; i < imy + flty; i++) {
+        for (size_t j = fltx; j < imx + fltx; j++) {
+            if (im[i][j] > maxval) {
+                maxval = im[i][j];
+                p.y = i;
+                p.x = j;
+            }
+        }
+    }
+    return p;
+}
+
+float sum(float **im, size_t imx, size_t imy)
+{
+    float retval = 0;
+    for(size_t i = 0; i < imy; i++) {
+        for(size_t j = 0; j < imx; j++) {
+            retval += im[i][j];
+        }
+    }
+    return retval;
+}
+
+
+void applyFilterInPosition(float **im, position p, float **filter, size_t fltx, size_t flty)
+{
+    size_t hfx = (fltx - 1) / 2;
+    size_t hfy = (flty - 1) / 2;
+    size_t upleftx = p.x - hfx;
+    size_t uplefty = p.y - hfy;
+    for(size_t i = 0; i < flty; i++) {
+        for(size_t j = 0; j < fltx; j++) {
+            im[uplefty + i][upleftx + j] -= filter[i][j];
         }
     }
 }
 
-matrix<uint8_t>* htSasanMethod(matrix<float> &im, matrix<float> &filter, size_t ndots)
+float** htSasanMethod(float **im, size_t imx, size_t imy, float **filter, size_t fltx, size_t flty, uint8_t mask)
 {
-    size_t imw = im.get_width();
-    size_t imh = im.get_height();
-    size_t fltw = filter.get_width();
-    size_t flth = filter.get_height();
-    matrix<float> *padding_blur = new matrix<float>(imw + fltw * 2, imh + flth * 2);
-    size_t halfx = (fltw - 1) / 2;
-    size_t halfy = (flth - 1) / 2;
-    padding_blur->put_sub_matrix(fltw, flth, im);
-    //返回的二值图像
-    matrix<uint8_t> *halftone_image = new matrix<uint8_t>(imw, imh);
+    float **blurImg = im;
+    float **paddingBlur;
+    size_t halfx = (fltx - 1) / 2;
+    size_t halfy = (flty - 1) / 2;
+    new2d(imx + 2 * fltx, imy + 2 * flty, &paddingBlur, 0.0f);
+    for (size_t i = 0; i < imy; i++) {
+        for (size_t j = 0; j < imx; j++) {
+            paddingBlur[i + flty][j + fltx] = blurImg[i][j];
+        }
+    }
+    //返回的二值图像 biImg
+    float **biImg;
+    new2d(imx, imy, &biImg, 0.0f);
     //直接把浮点数传递给整型会有问题吗？
-    for(size_t d = 0; d < ndots; d++) {
-        pos_t p = padding_blur->max_value_position(fltw, flth, imw, imh);
+    size_t dots = sum(im, imx, imy);
+    for(size_t i = 0; i < dots; i++) {
+        position maxPos = maxIndensity(paddingBlur, imx, imy, fltx, flty);
         //这一句是有用的
-        (*padding_blur)(p.y, p.x) = -1;
-        (*halftone_image)(p.y - flth, p.x - fltw) = 1;
-        applyFilterInPosition(*padding_blur, p.x, p.y, filter);
+        paddingBlur[maxPos.y][maxPos.x] = -1;
+        biImg[maxPos.y - flty][maxPos.x - fltx] = 1.0f;
+        applyFilterInPosition(paddingBlur, maxPos, filter, fltx, flty);
         //dealing with edge
-        if (p.y == flth) {
+        if (mask & 0x01 && maxPos.y == flty) {
             for (size_t i = 1; i <= halfy; i++) {
-                pos_t pt = { p.x, p.y - i };
-                applyFilterInPosition(*padding_blur, pt.x, pt.y, filter);
+                position p = { maxPos.x, maxPos.y - i };
+                applyFilterInPosition(paddingBlur, p, filter, fltx, flty);
             }
         }
-        if (p.y == flth + imh - 1) {
+        if (mask & 0x02 && maxPos.y == flty + imy - 1) {
             for (size_t i = 1; i <= halfy; i++) {
-                pos_t pt = { p.x, p.y + i };
-                applyFilterInPosition(*padding_blur, pt.x, pt.y, filter);
+                position p = { maxPos.x, maxPos.y + i };
+                applyFilterInPosition(paddingBlur, p, filter, fltx, flty);
             }
+
         }
-        if (p.x == fltw) {
+        if (mask & 0x04 && maxPos.x == fltx) {
             for (size_t i = 1; i <= halfx; i++) {
-                pos_t pt = { p.x - i, p.y };
-                applyFilterInPosition(*padding_blur, pt.x, pt.y, filter);
+                position p = { maxPos.x - i, maxPos.y };
+                applyFilterInPosition(paddingBlur, p, filter, fltx, flty);
+            }
+        }
+        if (mask & 0x08 && maxPos.x == fltx + imx - 1) {
+            for (size_t i = 1; i <= halfy; i++) {
+                position p = { maxPos.x + i, maxPos.y };
+                applyFilterInPosition(paddingBlur, p, filter, fltx, flty);
             }
         }
         //dealing with corner
-        if (p.x == fltw + imw - 1) {
-            for (size_t i = 1; i <= halfy; i++) {
-                pos_t pt = { p.x + i, p.y };
-                applyFilterInPosition(*padding_blur, pt.x, pt.y, filter);
-            }
-        }
-        if (p.x == fltw && p.y == flth) {
+        if (mask & 0x10 && maxPos.x == fltx && maxPos.y == flty) {
             for (size_t i = 1; i <= halfy; i++) {
                 for (size_t j = 1; j <= halfx; j++) {
-                    pos_t pt = { p.x - j, p.y - i };
-                    applyFilterInPosition(*padding_blur, pt.x, pt.y, filter);
+                    position p = { maxPos.x - j, maxPos.y - i };
+                    applyFilterInPosition(paddingBlur, p, filter, fltx, flty);
                 }
             }
         }
-        if (p.x == fltw && p.y == flth + imh - 1) {
+        if (mask & 0x20 && maxPos.x == fltx && maxPos.y == flty + imy - 1) {
             for (size_t i = 1; i <= halfy; i++) {
                 for (size_t j = 1; j <= halfx; j++) {
-                    pos_t pt = { p.x - j, p.y + i };
-                    applyFilterInPosition(*padding_blur, pt.x, pt.y, filter);
+                    position p = { maxPos.x - j, maxPos.y + i };
+                    applyFilterInPosition(paddingBlur, p, filter, fltx, flty);
                 }
             }
         }
-        if (p.x == fltw + imw - 1 && p.y == flth) {
+        if (mask & 0x40 && maxPos.x == fltx + imx - 1 && maxPos.y == flty) {
             for (size_t i = 1; i <= halfy; i++) {
                 for (size_t j = 1; j <= halfx; j++) {
-                    pos_t pt = { p.x + j, p.y - i };
-                    applyFilterInPosition(*padding_blur, pt.x, pt.y, filter);
+                    position p = { maxPos.x + j, maxPos.y - i };
+                    applyFilterInPosition(paddingBlur, p, filter, fltx, flty);
                 }
             }
         }
-        if (p.x == fltw + imw - 1 && p.y == flth + imh - 1) {
+        if (mask & 0x80 && maxPos.x == fltx + imx - 1 && maxPos.y == flty + imy - 1) {
             for (size_t i = 1; i <= halfy; i++) {
                 for (size_t j = 1; j <= halfx; j++) {
-                    pos_t pt = { p.x + j, p.y + i };
-                    applyFilterInPosition(*padding_blur, pt.x, pt.y, filter);
+                    position p = { maxPos.x + j, maxPos.y + i };
+                    applyFilterInPosition(paddingBlur, p, filter, fltx, flty);
                 }
             }
         }
+
     }
-    //释放内存
-    delete padding_blur;
-    return halftone_image;
+    del2d(imx + 2 * fltx, imy + 2 * flty, paddingBlur);
+    return biImg;
 }
 
-void apply_block_sasan_method(size_t blocks_x,
-                              size_t blocks_y,
-                              matrix<float> &origin_image,
-                              matrix<float> &im,
-                              matrix<float> &filter,
-                              matrix<uint8_t> &halftone_image,
-                              size_t block_size)
-{
-
-    size_t phase_coef[4][2] = {0, 0, 0, 1, 1, 0, 1, 1};
-
-    for(size_t p = 0; p < 4; p++) {
-        size_t phase_x;
-        size_t phase_y;
-        matrix<float> *blur_halftone_image = imfilter<uint8_t>(halftone_image, filter);
-        phase_x = (blocks_x + 1 - phase_coef[p][0]) / 2;
-        phase_y = (blocks_y + 1 - phase_coef[p][1]) / 2;
-        for(size_t i = 0; i < phase_y; i++) {
-            for(size_t j = 0; j < phase_x; j++) {
-                size_t xc = block_size * (2 * j + phase_coef[p][0]);
-                size_t yc = block_size * (2 * i + phase_coef[p][1]);
-                matrix<float> *blur_block = blur_halftone_image->get_sub_matrix(yc, xc, block_size, block_size);
-                matrix<float> *block_image = im.get_sub_matrix(yc, xc, block_size, block_size);
-                matrix<float> *subtracted_image = *block_image - *blur_block;
-                matrix<float> *origin_block_image = origin_image.get_sub_matrix(yc, xc, block_size, block_size);
-                size_t ndots = origin_block_image->sum();
-                matrix<uint8_t> *res = htSasanMethod(*subtracted_image, filter, ndots);
-                halftone_image.put_sub_matrix(yc, xc, *res);
-                delete res;
-                delete block_image;
-                delete origin_block_image;
-                delete subtracted_image;
-                delete blur_block;
-            }
-        }
-    }
-}
 
 int main()
 {
     CxImage image;
     //divide the image into small blocks so we can process it in parallel by adding OpenMP support
-    size_t block_size = 32;
-    size_t flt_size = 11;
-    matrix<float> *gaus_filter = gaussianFilterCreator(1.3f, flt_size);
+    size_t blockSize = 32;
+    size_t fltSize = 11;
+    float **gausFilter = gaussianFilterCreator(1.3f, 11);
     // _T() is necessary if we need UNICODE support
     if (image.Load(_T("lena.jpg") , CXIMAGE_SUPPORT_JPG)) {
         // To simplify the problem ,convert the image to 8 bits gray scale
         image.GrayScale();
         size_t width = image.GetWidth();
         size_t height = image.GetHeight();
-        size_t blocks_w = (width + block_size - 1) / block_size;
-        size_t blocks_h = (height + block_size - 1) / block_size;
-        size_t padding_image_w = block_size * blocks_w;
-        size_t padding_image_h = block_size * blocks_h;
-        matrix<float> image_data(padding_image_w, padding_image_h);
+        size_t xBlocks = (width + blockSize - 1) / blockSize;
+        size_t yBlocks = (height + blockSize - 1) / blockSize;
+        size_t padImg_x = blockSize * xBlocks;
+        size_t padImg_y = blockSize * yBlocks;
+        float** imageData;
+        new2d(padImg_x, padImg_y, &imageData, 0.0f);
 
         for (size_t y = 0; y < height; y++) {
             uint8_t *iSrc = image.GetBits(y);
             for (size_t x = 0; x < width; x++) {
-                image_data(y, x) = iSrc[x] / 255.0f;
+                imageData[y][x] = iSrc[x] / 255.0;
             }
         }
         //padding image
-        for(size_t x = width; x < padding_image_w; x++) {
+        for(size_t x = width; x < padImg_x; x++) {
             for(size_t y = 0; y < height; y++) {
-                image_data(y, x) = image_data(y, width - 1);
+                imageData[y][x] = imageData[y][width - 1];
             }
         }
-        for(size_t y = height; y < padding_image_h; y++) {
-            for(size_t x = 0; x < padding_image_w; x++) {
-                image_data(y, x) = image_data(height - 1, x);
+        for(size_t y = height; y < padImg_y; y++) {
+            for(size_t x = 0; x < padImg_x; x++) {
+                imageData[y][x] = imageData[height - 1][x];
             }
         }
-        matrix<float>  *blur_image_data = imfilter<float>(image_data, *gaus_filter);
-
+        float **blurImageData = imfilter(imageData, padImg_x, padImg_y, gausFilter, fltSize, fltSize);
         //halftone image
-        matrix<uint8_t> halftone_image(padding_image_w, padding_image_h);
+        float **htImage;
+        new2d(padImg_x, padImg_y, &htImage, 0.0f);
         //计时函数
         DWORD dwStart;
         DWORD dwEnd;
         DWORD dwTimes;
         dwStart = GetTickCount();
-        apply_block_sasan_method(blocks_w, blocks_h, image_data, *blur_image_data, *gaus_filter, halftone_image, block_size);
-        for (size_t i = 0; i < padding_image_h; i++) {
-            for(size_t j = 0; j < padding_image_w; j++) {
-                halftone_image(i, j) = halftone_image(i, j) * 255;
+        /////////////////////////////////////////////////////////////////////
+        size_t phase_coef[4][2] = {0, 0, 1, 0, 0, 1, 1, 1};
+        for(size_t p = 0; p < 4; p++) {
+            uint8_t edgeMask = 0x00;
+            size_t phase_x;
+            size_t phase_y;
+            phase_x = (xBlocks + 1 - phase_coef[p][0]) / 2;
+            phase_y = (yBlocks + 1 - phase_coef[p][1]) / 2;
+            float **fltHtImage = imfilter(htImage, padImg_x, padImg_y, gausFilter, fltSize, fltSize);
+            for(size_t i = 0; i < phase_y; i++) {
+                for(size_t j = 0; j < phase_x; j++) {
+                    size_t blockIdx_x = 2 * j + phase_coef[p][0];
+                    size_t blockIdx_y = 2 * i + phase_coef[p][1];
+                    size_t xc = blockSize * blockIdx_x;
+                    size_t yc = blockSize * blockIdx_y;
+                    switch(p) {
+                    case 0:
+                        edgeMask = 0xff;
+                        break;
+                    case 1:
+                        edgeMask = 0xf3;
+                        if(blockIdx_x == xBlocks - 1) {
+                            edgeMask |= 0x08;
+                        }
+                        break;
+                    case 2:
+                        edgeMask = 0x0c;
+                        if(blockIdx_x == xBlocks - 1) {
+                            edgeMask |= 0xc0;
+                        }
+                        if(blockIdx_x == 0) {
+                            edgeMask |= 0x30;
+                        }
+                        if(blockIdx_y == yBlocks - 1) {
+                            edgeMask |= 0xa2;
+                        }
+                        break;
+                    case 3:
+                        edgeMask = 0x00;
+                        if(blockIdx_x == xBlocks - 1) {
+                            edgeMask |= 0xc8;
+                        }
+                        if(blockIdx_y == yBlocks - 1) {
+                            edgeMask |= 0xa2;
+                        }
+                        break;
+                    }
+                    float** blockImage;
+                    new2d(blockSize, blockSize, &blockImage, 0.0f);
+                    for(size_t m = 0; m < blockSize; m++) {
+                        for(size_t n = 0; n < blockSize; n++) {
+                            blockImage[m][n] = blurImageData[yc + m][xc + n] - fltHtImage[yc + m][xc + n];
+                        }
+                    }
+                    float **res = htSasanMethod(blockImage, blockSize, blockSize, gausFilter, 11, 11, edgeMask);
+                    for(size_t m = 0; m < blockSize; m++) {
+                        for(size_t n = 0; n < blockSize; n++) {
+                            htImage[yc + m][xc + n] = res[m][n];
+                        }
+                    }
+                    del2d(blockSize, blockSize, blockImage);
+                    del2d(blockSize, blockSize, res);
+                }
             }
+            del2d(padImg_x, padImg_y, fltHtImage);
         }
+        //////////////////////////////////////////////////
         dwEnd = GetTickCount();
         dwTimes = dwEnd - dwStart;
         printf("加网lena图用时 %ld ms\n", dwTimes);
+        uint8_t **htImageByte;
+        new2d(padImg_x, padImg_y, &htImageByte, uint8_t(0));
+        for(size_t i = 0; i < padImg_y; i++) {
+            for(size_t j = 0; j < padImg_x; j++) {
+                htImageByte[i][j] = htImage[i][j] * 255;
+            }
+        }
         CxImage outputImg;
-        outputImg.CreateFromMatrix(halftone_image.get_elements_pointer(), width, height, 8, padding_image_w, NULL);
+        outputImg.CreateFromMatrix(htImageByte, width, height, 8, padImg_x, NULL);
         outputImg.Save(_T("ht_lena.bmp"), CXIMAGE_SUPPORT_BMP);
-
+        del2d(11, 11, gausFilter);
+        del2d(padImg_x, padImg_y, htImage);
+        del2d(padImg_x, padImg_y, htImageByte);
+        del2d(padImg_x, padImg_y, imageData);
         std::cout << "done\n";
         getchar();
     }
 }
-
-
-
