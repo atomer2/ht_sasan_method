@@ -25,13 +25,14 @@
 #define _UNICODE
 #endif
 template<typename T>
-void new2d(size_t cx, size_t cy, T*** rev, T initVal)
+void new2dInitZero(size_t cx, size_t cy, T*** rev)
 {
     T** f = new T*[cy];
     for (int i = 0; i < cy; i++) {
         f[i] = new T[cx];
         //为了提高速度不得不这么做，应该有更好的办法
-        memset(f[i], initVal, sizeof(T)*cx);
+        //对于不同的类型T,只有初始值是零下面的初始化才是正确的
+        memset(f[i], 0, sizeof(T)*cx);
     }
     *rev = f;
 }
@@ -49,7 +50,7 @@ float** padarray(size_t cx, size_t cy, float** im, size_t px, size_t py)
 {
     float** om;
     //0.0f 是为了让函数模板类型推断正确通过
-    new2d((cx + 2 * px), (cy + 2 * py), &om, 0.0f);
+    new2dInitZero((cx + 2 * px), (cy + 2 * py), &om);
     for (size_t i = 0; i < cy; i++) {
         for (size_t j = 0; j < cx; j++) {
             om[i + py][j + px] = im[i][j];
@@ -75,7 +76,7 @@ float** imfilter(float** im, size_t ix, size_t iy, float** filter, size_t fx, si
 {
     float **pim = padarray(ix, iy, im, fx, fy);
     float **om;
-    new2d(ix, iy, &om, 0.0f);
+    new2dInitZero(ix, iy, &om);
     size_t mx = (fx - 1) / 2;
     size_t my = (fy - 1) / 2;
     for (size_t i = 0; i < iy; i++) {
@@ -97,7 +98,7 @@ float** gaussianFilterCreator(float sigma, int size)
     float sum = 0;
     float **f;
     int mid = (size + 1) / 2;
-    new2d(size, size, &f, 0.0f);
+    new2dInitZero(size, size, &f);
     //为什么这里用int就可以用size_t就不行？
     //size_t是没有符号的，但是以下运算是有负数出现的
     //所以不能用size_t
@@ -168,13 +169,13 @@ void applyFilterInPosition(float **im, position p, float **filter, size_t fltx, 
     }
 }
 
-float** htSasanMethod(float **im, size_t imx, size_t imy, float **filter, size_t fltx, size_t flty, uint8_t mask)
+float** htSasanMethod(float **im, size_t imx, size_t imy, float **filter, size_t fltx, size_t flty, uint8_t mask, size_t ndots)
 {
     float **blurImg = im;
     float **paddingBlur;
     size_t halfx = (fltx - 1) / 2;
     size_t halfy = (flty - 1) / 2;
-    new2d(imx + 2 * fltx, imy + 2 * flty, &paddingBlur, 0.0f);
+    new2dInitZero(imx + 2 * fltx, imy + 2 * flty, &paddingBlur);
     for (size_t i = 0; i < imy; i++) {
         for (size_t j = 0; j < imx; j++) {
             paddingBlur[i + flty][j + fltx] = blurImg[i][j];
@@ -182,10 +183,9 @@ float** htSasanMethod(float **im, size_t imx, size_t imy, float **filter, size_t
     }
     //返回的二值图像 biImg
     float **biImg;
-    new2d(imx, imy, &biImg, 0.0f);
+    new2dInitZero(imx, imy, &biImg);
     //直接把浮点数传递给整型会有问题吗？
-    size_t dots = sum(im, imx, imy);
-    for(size_t i = 0; i < dots; i++) {
+    for(size_t i = 0; i < ndots; i++) {
         position maxPos = maxIndensity(paddingBlur, imx, imy, fltx, flty);
         //这一句是有用的
         paddingBlur[maxPos.y][maxPos.x] = -1;
@@ -275,7 +275,7 @@ int main()
         size_t padImg_x = blockSize * xBlocks;
         size_t padImg_y = blockSize * yBlocks;
         float** imageData;
-        new2d(padImg_x, padImg_y, &imageData, 0.0f);
+        new2dInitZero(padImg_x, padImg_y, &imageData);
 
         for (size_t y = 0; y < height; y++) {
             uint8_t *iSrc = image.GetBits(y);
@@ -296,8 +296,10 @@ int main()
         }
         float **blurImageData = imfilter(imageData, padImg_x, padImg_y, gausFilter, fltSize, fltSize);
         //halftone image
-        float **htImage;
-        new2d(padImg_x, padImg_y, &htImage, 0.0f);
+        float **htImageBlackIsZero;
+        float **htImageWhiteIsZero;
+        new2dInitZero(padImg_x, padImg_y, &htImageBlackIsZero);
+        new2dInitZero(padImg_x, padImg_y, &htImageWhiteIsZero);
         //计时函数
         DWORD dwStart;
         DWORD dwEnd;
@@ -311,7 +313,8 @@ int main()
             size_t phase_y;
             phase_x = (xBlocks + 1 - phase_coef[p][0]) / 2;
             phase_y = (yBlocks + 1 - phase_coef[p][1]) / 2;
-            float **fltHtImage = imfilter(htImage, padImg_x, padImg_y, gausFilter, fltSize, fltSize);
+            float **fltHtImageBlackIsZero = imfilter(htImageBlackIsZero, padImg_x, padImg_y, gausFilter, fltSize, fltSize);
+            float **fltHtImageWhiteIsZero = imfilter(htImageWhiteIsZero, padImg_x, padImg_y, gausFilter, fltSize, fltSize);
             for(size_t i = 0; i < phase_y; i++) {
                 for(size_t j = 0; j < phase_x; j++) {
                     size_t blockIdx_x = 2 * j + phase_coef[p][0];
@@ -350,44 +353,80 @@ int main()
                         }
                         break;
                     }
-                    float** blockImage;
-                    new2d(blockSize, blockSize, &blockImage, 0.0f);
-                    for(size_t m = 0; m < blockSize; m++) {
-                        for(size_t n = 0; n < blockSize; n++) {
-                            blockImage[m][n] = blurImageData[yc + m][xc + n] - fltHtImage[yc + m][xc + n];
+                    size_t halfDots = blockSize * blockSize / 2;
+                    bool blackIsMinor;
+                    float ndots = 0;
+                    for(size_t i = 0; i < blockSize; i++) {
+                        for(size_t j = 0; j < blockSize; j++) {
+                            ndots += imageData[yc + i][xc + j];
                         }
                     }
-                    float **res = htSasanMethod(blockImage, blockSize, blockSize, gausFilter, 11, 11, edgeMask);
+                    blackIsMinor = ndots > halfDots;
+                    float** blockImage;
+                    new2dInitZero(blockSize, blockSize, &blockImage);
                     for(size_t m = 0; m < blockSize; m++) {
                         for(size_t n = 0; n < blockSize; n++) {
-                            htImage[yc + m][xc + n] = res[m][n];
+                            if(blackIsMinor) {
+                                blockImage[m][n] = 1 - blurImageData[yc + m][xc + n] - fltHtImageWhiteIsZero[yc + m][xc + n];
+                            } else {
+                                blockImage[m][n] = blurImageData[yc + m][xc + n] - fltHtImageBlackIsZero[yc + m][xc + n];
+                            }
+                        }
+                    }
+                    if(blackIsMinor) {
+                        ndots = blockSize * blockSize - ndots;
+                    }
+                    float **res = htSasanMethod(blockImage, blockSize, blockSize, gausFilter, 11, 11, edgeMask, ndots);
+                    for(size_t m = 0; m < blockSize; m++) {
+                        for(size_t n = 0; n < blockSize; n++) {
+                            if(blackIsMinor) {
+                                htImageBlackIsZero[yc + m][xc + n] = 1 - res[m][n];
+                                htImageWhiteIsZero[yc + m][xc + n] = res[m][n];
+                            } else {
+                                htImageBlackIsZero[yc + m][xc + n] = res[m][n];
+                                htImageWhiteIsZero[yc + m][xc + n] = 1 - res[m][n];
+                            }
                         }
                     }
                     del2d(blockSize, blockSize, blockImage);
                     del2d(blockSize, blockSize, res);
                 }
             }
-            del2d(padImg_x, padImg_y, fltHtImage);
+            del2d(padImg_x, padImg_y, fltHtImageBlackIsZero);
+            del2d(padImg_x, padImg_y, fltHtImageWhiteIsZero);
         }
         //////////////////////////////////////////////////
         dwEnd = GetTickCount();
         dwTimes = dwEnd - dwStart;
         printf("加网lena图用时 %ld ms\n", dwTimes);
-        uint8_t **htImageByte;
-        new2d(padImg_x, padImg_y, &htImageByte, uint8_t(0));
+        uint8_t **htImageBlackIsZeroByte;
+        new2dInitZero(padImg_x, padImg_y, &htImageBlackIsZeroByte);
         for(size_t i = 0; i < padImg_y; i++) {
             for(size_t j = 0; j < padImg_x; j++) {
-                htImageByte[i][j] = htImage[i][j] * 255;
+                htImageBlackIsZeroByte[i][j] = htImageBlackIsZero[i][j] * 255;
             }
         }
         CxImage outputImg;
-        outputImg.CreateFromMatrix(htImageByte, width, height, 8, padImg_x, NULL);
+        outputImg.CreateFromMatrix(htImageBlackIsZeroByte, width, height, 8, padImg_x, NULL);
         outputImg.Save(_T("ht_lena.bmp"), CXIMAGE_SUPPORT_BMP);
         del2d(11, 11, gausFilter);
-        del2d(padImg_x, padImg_y, htImage);
-        del2d(padImg_x, padImg_y, htImageByte);
+        del2d(padImg_x, padImg_y, htImageBlackIsZero);
+        del2d(padImg_x, padImg_y, htImageWhiteIsZero);
+        del2d(padImg_x, padImg_y, htImageBlackIsZeroByte);
         del2d(padImg_x, padImg_y, imageData);
         std::cout << "done\n";
         getchar();
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
