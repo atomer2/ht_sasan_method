@@ -78,26 +78,58 @@ float** padarray(size_t cx, size_t cy, float** im, size_t px, size_t py)
     }
     return om;
 }
-
-float** imfilter(float** im, size_t ix, size_t iy, float** filter, size_t fx, size_t fy)
+//用分离的高斯滤波,速度更快
+float** imfilter(float** im, size_t ix, size_t iy, float* filter, size_t fs)
 {
-    float **pim = padarray(ix, iy, im, fx, fy);
+    size_t ms = (fs - 1) / 2;
+    float **pim = padarray(ix, iy, im, ms, ms);
     float **om;
     new2dInitZero(ix, iy, &om);
-    size_t mx = (fx - 1) / 2;
-    size_t my = (fy - 1) / 2;
+    float **tmpImg;
+    new2dInitZero(ix + 2 * ms, iy, &tmpImg);
+//    for (size_t i = 0; i < iy; i++) {
+//        for (size_t j = 0; j < ix; j++) {
+//            om[i][j] = 0;
+//            for (size_t m = 0; m < fy; m++) {
+//                for (size_t n = 0; n < fx; n++) {
+//                    om[i][j] += pim[m + i + my + 1][n + j + mx + 1] * filter[m][n];
+//                }
+//            }
+//        }
+//    }
+    //纵向滤波
     for (size_t i = 0; i < iy; i++) {
-        for (size_t j = 0; j < ix; j++) {
-            om[i][j] = 0;
-            for (size_t m = 0; m < fy; m++) {
-                for (size_t n = 0; n < fx; n++) {
-                    om[i][j] += pim[m + i + my + 1][n + j + mx + 1] * filter[m][n];
-                }
+        for (size_t j = 0; j < ix + 2 * ms; j++) {
+            for(size_t m = 0; m < fs; m++) {
+                tmpImg[i][j] += pim[m + i][j] * filter[m];
             }
         }
     }
-    del2d(ix + fx, iy + fy, pim);
+    //横向滤波
+    for (size_t i = 0; i < iy; i++) {
+        for (size_t j = 0; j < ix; j++) {
+            for(size_t n = 0; n < fs; n++) {
+                om[i][j] += tmpImg[i][n + j] * filter[n];
+            }
+        }
+    }
+    del2d(ix + 2 * ms, iy + 2 * ms, pim);
+    del2d(ix + 2 * ms, iy, tmpImg);
     return om;
+}
+
+float* flatGaussianFilterCreator(float sigma, int size)
+{
+    float sum = 0;
+    int mid = (size + 1) / 2;
+    float *f = new float[size];
+    for(int i = 0; i < size; i++) {
+        sum += f[i] = exp(-(pow(i + 1 - mid, 2) / (2 * pow(sigma, 2))));
+    }
+    for(int i = 0; i < size; i++) {
+        f[i] /= sum;
+    }
+    return f;
 }
 
 float** gaussianFilterCreator(float sigma, int size)
@@ -140,7 +172,7 @@ typedef struct pos {
 
 position maxIndensity(float **im, size_t imx, size_t imy, size_t fltx, size_t flty)
 {
-    position p = {0, 0};
+    position p = {fltx,  flty};
     float maxval = 0;
     for(size_t i = flty; i < imy + flty; i++) {
         for (size_t j = fltx; j < imx + fltx; j++) {
@@ -272,7 +304,9 @@ void halftoneProcess(char *filename)
     //divide the image into small blocks so we can process it in parallel by adding OpenMP support
     size_t blockSize = 32;
     size_t fltSize = 11;
-    float **gausFilter = gaussianFilterCreator(1.3f, 11);
+    float sigma = 1.3f;
+    float *gausFilter = flatGaussianFilterCreator(sigma, fltSize);
+    float **gausFilter2d = gaussianFilterCreator(sigma, fltSize);
     char drive[_MAX_DRIVE];
     char dir[_MAX_DIR];
     char fname[_MAX_FNAME];
@@ -327,11 +361,11 @@ void halftoneProcess(char *filename)
                 imageData[y][x] = imageData[height - 1][x];
             }
         }
-        float **blurImageData = imfilter(imageData, padImg_x, padImg_y, gausFilter, fltSize, fltSize);
+        float **blurImageData = imfilter(imageData, padImg_x, padImg_y, gausFilter, fltSize);
         //halftone image
         float **htImageBlackIsZero;
         float **htImageWhiteIsZero;
-        //处理的时候,控制少数点的位置,可以块边缘处的缺陷
+        //处理的时候,控制少数点的位置,可以减少块边缘处的缺陷
         new2dInitZero(padImg_x, padImg_y, &htImageBlackIsZero);
         new2dInitZero(padImg_x, padImg_y, &htImageWhiteIsZero);
         //计时函数
@@ -350,8 +384,8 @@ void halftoneProcess(char *filename)
             size_t phase_y;
             phase_x = (xBlocks + 1 - phase_coef[p][0]) / 2;
             phase_y = (yBlocks + 1 - phase_coef[p][1]) / 2;
-            float **fltHtImageBlackIsZero = imfilter(htImageBlackIsZero, padImg_x, padImg_y, gausFilter, fltSize, fltSize);
-            float **fltHtImageWhiteIsZero = imfilter(htImageWhiteIsZero, padImg_x, padImg_y, gausFilter, fltSize, fltSize);
+            float **fltHtImageBlackIsZero = imfilter(htImageBlackIsZero, padImg_x, padImg_y, gausFilter, fltSize);
+            float **fltHtImageWhiteIsZero = imfilter(htImageWhiteIsZero, padImg_x, padImg_y, gausFilter, fltSize);
 
             for (size_t i = 0; i < phase_y; i++) {
                 //printf("%c%c", 0xa8, 0x80);
@@ -417,7 +451,7 @@ void halftoneProcess(char *filename)
                     if (blackIsMinor) {
                         ndots = blockSize * blockSize - ndots;
                     }
-                    float **res = htSasanMethod(blockImage, blockSize, blockSize, gausFilter, 11, 11, edgeMask, ndots);
+                    float **res = htSasanMethod(blockImage, blockSize, blockSize, gausFilter2d, fltSize, fltSize, edgeMask, ndots);
                     for (size_t m = 0; m < blockSize; m++) {
                         for (size_t n = 0; n < blockSize; n++) {
                             if (blackIsMinor) {
@@ -467,11 +501,12 @@ void halftoneProcess(char *filename)
 #endif
         outputImg.Save(wcGeneratedFileName, CXIMAGE_SUPPORT_BMP);
         printf("File Generated: %s.bmp\n", fname);
-        del2d(11, 11, gausFilter);
+        del2d(fltSize, fltSize, gausFilter2d);
         del2d(padImg_x, padImg_y, htImageBlackIsZero);
         del2d(padImg_x, padImg_y, htImageWhiteIsZero);
         del2d(padImg_x, padImg_y, htImageBlackIsZeroByte);
         del2d(padImg_x, padImg_y, imageData);
+        delete gausFilter;
     }
 }
 
