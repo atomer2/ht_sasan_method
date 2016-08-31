@@ -497,7 +497,7 @@ void halftoneProcess(char *filename)
 #ifdef UNICODE
         MultiByteToWideChar(CP_ACP, 0, generatedFileName, -1, wcGeneratedFileName , 100);
 #else
-        strcpy(file, filename);
+        strcpy(wcGeneratedFileName, generatedFileName);
 #endif
         outputImg.Save(wcGeneratedFileName, CXIMAGE_SUPPORT_BMP);
         printf("File Generated: %s.bmp\n", fname);
@@ -506,7 +506,7 @@ void halftoneProcess(char *filename)
         del2d(padImg_x, padImg_y, htImageWhiteIsZero);
         del2d(padImg_x, padImg_y, htImageBlackIsZeroByte);
         del2d(padImg_x, padImg_y, imageData);
-        delete gausFilter;
+        delete [] gausFilter;
     }
 }
 
